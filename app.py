@@ -10,10 +10,22 @@ def test():
 
 @app.route("/split", methods=["POST"])
 def mock_split():
+    # Check if file is part of the request
+    if 'audio_file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+
+    audio_file = request.files['audio_file']
+    if audio_file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
+
+    # For now, just print file info to server log
+    print(f"Received file: {audio_file.filename}")
+
+    # Return a simulated response
     return jsonify({
         "job_id": "mock123",
         "status": "processing",
-        "message": "This is a mock response"
+        "message": f"Received {audio_file.filename}, not sent to LALAL.ai yet"
     })
 
 @app.route("/results/<job_id>", methods=["GET"])
