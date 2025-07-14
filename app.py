@@ -4,7 +4,8 @@ from flask_cors import CORS
 from functools import wraps
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins="*", methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type", "x-api-key"])
+
 
 # Read the secret key from environment variable
 API_KEY = os.getenv("BACKEND_API_KEY")
