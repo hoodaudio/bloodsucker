@@ -1,4 +1,5 @@
 import os
+import requests
 from flask import Flask, request, jsonify, abort
 from flask_cors import CORS
 from functools import wraps
@@ -6,9 +7,9 @@ from functools import wraps
 app = Flask(__name__)
 CORS(app, origins="*", methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type", "x-api-key"])
 
-
-# Read the secret key from environment variable
+# Read environment variables
 API_KEY = os.getenv("BACKEND_API_KEY")
+LALAL_API_KEY = os.getenv("LALAL_API_KEY")
 
 def require_api_key(f):
     @wraps(f)
@@ -35,23 +36,56 @@ def split():
 
     print(f"Received file: {audio_file.filename}")
 
-    # TODO: Call LALAL.ai API here with audio_file
+    try:
+        # Upload the file to LALAL.ai
+        response = requests.post(
+            "https://api.lalal.ai/v1/extract/",
+            headers={"Authorization": f"Token {LALAL_API_KEY}"},
+            files={"file": (audio_file.filename, audio_file.stream, audio_file.mimetype)}
+        )
 
-    return jsonify({
-        "job_id": "mock123",
-        "status": "processing",
-        "message": f"Received {audio_file.filename}, processing started"
-    })
+        response.raise_for_status()
+        data = response.json()
+
+        job_id = data.get("id")
+        if job_id:
+            return jsonify({
+                "job_id": job_id,
+                "status": "processing",
+                "message": f"File sent to LALAL.ai for processing"
+            })
+        else:
+            return jsonify({"error": "Failed to retrieve job ID"}), 500
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error sending file to LALAL.ai: {e}")
+        return jsonify({"error": "Failed to send file to LALAL.ai"}), 500
 
 @app.route("/results/<job_id>", methods=["GET"])
 @require_api_key
 def results(job_id):
-    # TODO: Fetch real results from LALAL.ai by job_id
-    return jsonify({
-        "status": "done",
-        "vocal_link": "https://example.com/vocals.wav",
-        "instrumental_link": "https://example.com/instrumental.wav"
-    })
+    try:
+        response = requests.get(
+            f"https://api.lalal.ai/v1/result/{job_id}/",
+            headers={"Authorization": f"Token {LALAL_API_KEY}"}
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        if data.get("status") == "done":
+            stems = data.get("result", {})
+            return jsonify({
+                "status": "done",
+                "vocal_link": stems.get("vocals"),
+                "instrumental_link": stems.get("instrumental")
+            })
+        elif data.get("status") == "processing":
+            return jsonify({"status": "processing"})
+        else:
+            return jsonify({"status": data.get("status"), "message": data.get("message")}), 202
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching results: {e}")
+        return jsonify({"error": "Failed to fetch results from LALAL.ai"}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
